@@ -35,6 +35,13 @@ unsigned int fca_giorgio_checksum(uint32_t address, const Signal &sig, const std
 unsigned int pedal_checksum(uint32_t address, const Signal &sig, const std::vector<uint8_t> &d);
 unsigned int tesla_checksum(uint32_t address, const Signal &sig, const std::vector<uint8_t> &d);
 
+/*
+条件が false のときに、エラー内容 + DBCファイル名 + 行番号を含んだ例外を投げるための デバッグ支援マクロ。
+do { ... } while(false) | 複数行マクロを安全に囲む構文（if文と一緒に使っても安全）
+std::stringstream is;   | エラーメッセージを構築するストリーム
+is << "[" << dbc_name << ":" << line_num << "] " << message; | メッセージに DBCファイル名と行番号を追加
+throw std::runtime_error(is.str());                          | 最終的に例外を送出（詳細付き）
+*/
 #define DBC_ASSERT(condition, message)                             \
   do {                                                             \
     if (!(condition)) {                                            \

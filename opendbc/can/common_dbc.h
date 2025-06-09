@@ -57,6 +57,12 @@ struct DBC {
   std::unordered_map<std::string, const Msg*> name_to_msg;
 };
 
+/*
+「関数を定義している」のではなく「関数ポインタをメンバとして持っている」
+インターフェイスだけここで定義し、詳細は別途定義する or 他の関数を流用する
+dbc.cc　で　下記のように使われている
+    s = new ChecksumState({4, 2, 3, 5, false, HONDA_CHECKSUM, &honda_checksum});
+*/
 typedef struct ChecksumState {
   int checksum_size;
   int counter_size;

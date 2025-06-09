@@ -6,6 +6,13 @@
 
 #include "opendbc/can/common.h"
 
+/*
+CHECKSUM_PEDAL や COUNTER_PEDAL という特定のシグナル名に対して、
+- ビット長が正しいか確認（バリデーション）
+- シグナルの種類を明示的に設定（sig.type = ...）
+
+DBC_ASSERT : 条件が false のときに、エラー内容 + DBCファイル名 + 行番号を含んだ例外を投げる
+*/
 void pedal_setup_signal(Signal &sig, const std::string& dbc_name, int line_num) {
   if (sig.name == "CHECKSUM_PEDAL") {
     DBC_ASSERT(sig.size == 8, "INTERCEPTOR CHECKSUM is not 8 bits long");
@@ -25,26 +32,65 @@ void tesla_setup_signal(Signal &sig, const std::string& dbc_name, int line_num) 
   }
 }
 
+/*
+CANの基本
+種類           | 名前             | ビット長 | 最大値               | 用途
+標準フォーマット | Standard CAN ID | 11ビット | 0x7FF（= 2047）      | 一般的に広く使用
+拡張フォーマット | Extended CAN ID | 29ビット | 0x1FFFFFFF（= 約5億） | 車載ネットワークで一部使用
+
+0x7FF = 0b0111 1111 1111 = 2047（10進数）
+つまり、11ビットすべてが 1 の状態です。
+    11ビット最大 → 2047
+これを超えていたら → 29ビット拡張ID
+
+*/
 unsigned int honda_checksum(uint32_t address, const Signal &sig, const std::vector<uint8_t> &d) {
   int s = 0;
+  // 「CAN ID が11ビットを超えているかどうか」を判定
   bool extended = address > 0x7FF;
+
+  // CAN ID を「4ビットずつに分解して、全部足し合わせる」
+  //     address & 0xF : 下位4ビットをaddressから取り出す
+  //     address >>= 4 : 右へ4ビット論理シフト
   while (address) { s += (address & 0xF); address >>= 4; }
+
+  /*
+  d は std::vector<uint8_t>、つまり CANのデータ8バイト
+     d = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF3}
+     このとき 0xF3 の下位4ビット 0x3 を除外して計算することになります。
+  */
   for (int i = 0; i < d.size(); i++) {
+    // 1バイト分データを代入
     uint8_t x = d[i];
+
+    // 最後のバイトは、Checksumを削除
     if (i == d.size()-1) x >>= 4; // remove checksum
+
+    // 和を取る. 下位4ビット(x & 0xF) + 上位4ビット(x >> 4)
     s += (x & 0xF) + (x >> 4);
   }
+
+  // Hondaでは：チェックサム値 = 8 - (各 nibble の合計)
   s = 8-s;
+
+  // 拡張CANフレーム（Extended CAN ID） のときに チェックサム計算に +3 を追加
   if (extended) s += 3;  // extended can
 
+  // 下位4ビットを返す
   return s & 0xF;
 }
 
 unsigned int toyota_checksum(uint32_t address, const Signal &sig, const std::vector<uint8_t> &d) {
+  // s に CANメッセージのバイト数を加算
   unsigned int s = d.size();
+
+  // CAN ID を 8bit(=1byte)ずつ加算
   while (address) { s += address & 0xFF; address >>= 8; }
+
+  // CANメッセージのデータ部分（最大8バイト）を 1byte毎に加算
   for (int i = 0; i < d.size() - 1; i++) { s += d[i]; }
 
+  // 下位8bit = 1byteを返す
   return s & 0xFF;
 }
 
