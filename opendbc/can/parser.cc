@@ -78,6 +78,8 @@ int64_t get_raw_value(const std::vector<uint8_t> &msg, const Signal &sig) {
     ret |= d << (bits - size);
 
     bits -= size;
+
+    // Little Endianの場合は i-
     i = sig.is_little_endian ? i-1 : i+1;
   }
   return ret;
